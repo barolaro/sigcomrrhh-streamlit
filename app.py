@@ -108,4 +108,4 @@ else:
     st.info("Por favor, sube un archivo Excel para comenzar.")
 
 st.markdown("---")
-st.markdown("### 💡 *Desarrollado para Bayron – Procesamiento SIGCOM Automático*")
+st.markdown("### 💡 *Desarrollado por Alejandra Rodríguez*")
