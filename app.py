@@ -31,9 +31,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# título
+# Título
 st.markdown("<div class='title'>📘 Procesador SIGCOM – AGRUPACIÓN RUT + LEY</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub'>Sube tu archivo SIGCOM y se generará automáticamente el resumen consolidado.</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub'>Sube tu archivo SIGCOM y se generará automáticamente el resumen consolidado sin duplicar RUT por Ley.</div>", unsafe_allow_html=True)
 st.write("")
 
 # --- Subida de archivo ---
@@ -42,20 +42,28 @@ uploaded_file = st.file_uploader("📤 Sube tu archivo Excel SIGCOM", type=["xls
 if uploaded_file:
 
     st.success("Archivo cargado correctamente ✔")
-    
-    # leer excel (hoja DOTACION)
+
+    # Intentar leer la hoja DOTACION; si no existe, leer la primera hoja
     try:
         df = pd.read_excel(uploaded_file, sheet_name="DOTACION")
-    except:
-        df = pd.read_excel(uploaded_file)  # por si la hoja tiene otro nombre
+    except Exception:
+        df = pd.read_excel(uploaded_file)
 
     st.subheader("📋 Vista previa del archivo original")
     st.dataframe(df.head(20), use_container_width=True)
 
-    # guardar orden de columnas
+    # Guardar orden original de columnas
     columnas_originales = list(df.columns)
 
-    # columnas de montos
+    # Detectar nombre exacto de la columna de Horas realizadas
+    # Puede ser "Horas \nrealizadas" o "Horas realizadas"
+    col_horas_realizadas = None
+    for posible in ["Horas \nrealizadas", "Horas realizadas"]:
+        if posible in df.columns:
+            col_horas_realizadas = posible
+            break
+
+    # Columnas de montos (a sumar) + horas realizadas
     cols_montos = [
         "Remuneración",
         "Honorarios",
@@ -68,31 +76,37 @@ if uploaded_file:
         "Comisión de Servicio Cedido",
     ]
 
-    # convertir montos a números
+    # Agregar Horas realizadas si existe la columna
+    if col_horas_realizadas is not None:
+        cols_montos.append(col_horas_realizadas)
+
+    # Convertir montos y horas realizadas a números
     for c in cols_montos:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
-    # agrupar por rut + ley
+    # Agrupar por Rut + Nro Ley (regla que definimos)
     group_cols = ["Rut", "Nro Ley"]
+
+    # Diccionario de agregación: montos y horas → suma
     agg_dict = {c: "sum" for c in cols_montos}
 
-    # otras columnas → first
+    # Otras columnas → tomar la primera aparición
     for c in df.columns:
         if c not in group_cols and c not in cols_montos:
             agg_dict[c] = "first"
 
-    # agrupación final
+    # Agrupación final
     resumen = df.groupby(group_cols, as_index=False).agg(agg_dict)
 
-    # mantener orden original
+    # Mantener el orden original de columnas en la salida
     columnas_finales = [c for c in columnas_originales if c in resumen.columns]
     resumen = resumen[columnas_finales]
 
-    st.subheader("📊 Resultado Consolidado (Sin duplicados)")
+    st.subheader("📊 Resultado Consolidado (Sin duplicados de RUT por Ley)")
     st.dataframe(resumen, use_container_width=True)
 
-    # preparar archivo para descarga
+    # Preparar archivo Excel para descarga
     buffer = io.BytesIO()
     resumen.to_excel(buffer, index=False)
     buffer.seek(0)
